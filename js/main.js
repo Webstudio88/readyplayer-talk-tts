@@ -1,6 +1,3 @@
-// GET Character from ReadyPlayerMe
-// https://models.readyplayer.me/--READYPLAYERME--.glb?morphTargets=ARKit&lod=1&textureFormat=webp
-
 // On Document Loaded - Start Game //
 document.addEventListener("DOMContentLoaded", startGame);
 
@@ -9,10 +6,10 @@ var canvas = document.getElementById("renderCanvas");
 var engine = new BABYLON.Engine(canvas, true, { stencil: false }, true);
 var scene = createScene(engine, canvas);
 var camera = new BABYLON.ArcRotateCamera("camera", BABYLON.Tools.ToRadians(-90), BABYLON.Tools.ToRadians(65), 6, BABYLON.Vector3.Zero(), scene);
-var dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0,0,0), scene);
+var dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0, 0, 0), scene);
 var hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
 var shadowGenerator = new BABYLON.ShadowGenerator(1024, dirLight, true);
-var videoTexture = new BABYLON.VideoTexture("vidtex","./resources/videos/video.mp4", scene, true, true);
+var videoTexture = new BABYLON.VideoTexture("vidtex", "./resources/videos/video.mp4", scene, true, true);
 
 var hdrTexture;
 var hdrRotation = 0;
@@ -22,7 +19,6 @@ var talking1, talking2, talking3;
 var salute;
 var observer1, observer2, observer3;
 var currentAnimation;
-var talking;
 var animationOffset = 50;
 
 // Player
@@ -31,14 +27,43 @@ var modelName = "player";
 
 // Morph Targets
 var leftEye, rightEye;
-var morphMultiplier_1 = 0.65;
+var morphMultiplier_1 = 0.4;
 var morphMultiplier_2 = 1;
 
 var paused = false;
 var timer = 0;
 
-var music, sfx1, speech;
-var myAnalyser;
+var music, sfx1;
+
+// TTS-instellingen
+var tts = new SpeechSynthesisUtterance();
+tts.lang = 'nl-NL'; // Kies de gewenste taal, bijvoorbeeld 'nl-NL' voor Nederlands
+tts.pitch = 1; // Kan worden aangepast
+tts.rate = 1; // Kan worden aangepast
+
+var isTTSSpeaking = false;
+
+// Functie om TTS te starten
+function startSpeech(text) {
+    console.log(scene.getMeshByName("Wolf3D_Head").morphTargetManager);
+
+
+    if (!isTTSSpeaking) {
+        tts.text = text;
+        speechSynthesis.speak(tts);
+        isTTSSpeaking = true;
+        tts.onend = function() {
+            isTTSSpeaking = false;
+        };
+    }
+}
+// Functie om TTS te stoppen
+function stopSpeech() {
+    if (isTTSSpeaking) {
+        speechSynthesis.cancel();
+        isTTSSpeaking = false;
+    }
+}
 
 // Create Scene
 function createScene(engine, canvas) {
@@ -63,55 +88,10 @@ function startGame() {
         loop: true
     });
 
-
     // SFX Using HTML Audio to prevent Silence switch on mobile devices
     sfx1 = document.createElement("audio");
     sfx1.preload = "auto";
     sfx1.src = "./resources/sounds/sfx1.mp3";
-
-    speech = new BABYLON.Sound("speech", "./resources/sounds/speech.mp3", scene, function () {
-    });
-
-    speech.onended = function () {
-        console.log("End Speech");
-        talking = false;
-        setIdleAnimObservers();
-        setTimeout(() => {
-            document.getElementById("client-logo").style.visibility = "visible";
-            document.getElementById("client-logo").classList.remove("fadeOut");
-            document.getElementById("client-logo").classList.add("fadeIn");
-
-            if (timelineInterval)
-                clearInterval(timelineInterval);
-        }, 1000);
-        scene.onBeforeRenderObservable.runCoroutineAsync(animationBlending(currentAnimation, 0.7, idle1, 0.7, false, 0.02, 0, idle1.duration, 0.8));
-    };
-
-    // Add Speech Sound to a SoundTrack to get the analiser data
-    const speechTrack = new BABYLON.SoundTrack(scene);
-    speechTrack.addSound(speech);
-
-    // Audio Analyser
-    myAnalyser = new BABYLON.Analyser(scene);
-    speechTrack.connectToAnalyser(myAnalyser);
-    myAnalyser.FFT_SIZE = 64;
-    myAnalyser.SMOOTHING = 0.03;
-    // myAnalyser.drawDebugCanvas();
-
-    // Stop All Animations Init
-    BABYLON.SceneLoader.OnPluginActivatedObservable.add(function (plugin) {
-        currentPluginName = plugin.name;
-        if (plugin.name === "gltf" && plugin instanceof BABYLON.GLTFFileLoader) {
-            plugin.animationStartMode = BABYLON.GLTFLoaderAnimationStartMode.NONE;
-        }
-    });
-
-    // Glow Layer
-    // var gl = new BABYLON.GlowLayer("glow", scene, {
-    //     mainTextureFixedSize: 256,
-    //     blurKernelSize: 128
-    // });
-    // gl.intensity = 0.7;
 
     // Create Camera
     createCamera();
@@ -138,25 +118,18 @@ function startGame() {
 
     // Check Window Blur / Focus
     setInterval(checkWindowFocused, 500);
-
-    // scene.debugLayer.show({embedMode: true}).then(function () {
-    // });
 }
 
 // Check Window Focus
 function checkWindowFocused() {
     if (document.hasFocus()) {
         paused = false;
-        if (talking)
-            speech.setVolume(1);
         if (timer > 2 && !music.isPlaying) {
             music.play();
         }
     } else {
         paused = true;
-        speech.setVolume(0);
-        if (music && music.isPlaying)
-        {
+        if (music && music.isPlaying) {
             music.pause();
         }
     }
@@ -181,6 +154,7 @@ function createCamera() {
     camera.radius = 15;
 }
 
+// Import Base Model
 async function importBaseModel(model) {
     const result = await BABYLON.SceneLoader.ImportMeshAsync(null, "./resources/models/", model, scene);
     const sphere1 = scene.getMeshByName("Sphere_1");
@@ -249,7 +223,6 @@ async function importBaseModel(model) {
         }
     });
 }
-
 
 // Setup Animations & Player
 var animationsGLB = [];
@@ -480,10 +453,7 @@ function removeAnimObservers() {
 // Play Sounds
 function playSounds() {  
     sfx1.play();
-    if (speech && speech.isPlaying) {
-        speech.stop();
-        speech.currentTime = 0;
-    }
+    // Verwijder de speech gerelateerde code, aangezien speech niet langer gedefinieerd is
     if (music && !music.isPlaying) {
         music.volume = 0.6;
         music.play();  
@@ -574,46 +544,41 @@ function startTimeline() {
                 spheresAnim2.play(true);
             });
         }
-
-        // Start Speech after 3 seconds
         if (timer === 3) {
-            // Start Speech
-            setTimeout(() => {
-                if (!talking) {
-                    speech.volume = 1;
-                    talking = true;
-                    speech.play();
-                }
-            }, 200);
-
-            // Show Client Card
-            setTimeout(() => {
-                const clientCardContainer = document.getElementById("client-card-container");
-                if (clientCardContainer.style.visibility === "hidden") {
-                    clientCardContainer.style.visibility = "visible";
-                    clientCardContainer.classList.add("fadeIn");
-                    clientCardContainer.classList.remove("fadeOut");
-                }
-            }, 800);
-
-            // RegisterBeforeRender Morph Target Mouth
-            scene.registerBeforeRender(function () {
-                const workingArray = myAnalyser.getByteFrequencyData();
-                let jawValue = 0;
-
-                if (talking) {
-                    // console.log("Frequency: " + workingArray[5] / 512);
-                    jawValue = workingArray[5] / 512 * morphMultiplier_1;
-                }
-
-                scene.getMeshByName("Wolf3D_Head").morphTargetManager.getTarget(16).influence = jawValue * 2;
-                scene.getMeshByName("Wolf3D_Head").morphTargetManager.getTarget(34).influence = jawValue;
-                scene.getMeshByName("Wolf3D_Teeth").morphTargetManager.getTarget(34).influence = jawValue;
-            });
+            if (!isTTSSpeaking) {
+                startSpeech("hallo, ik ben een virtuele assistent. Ik kan je helpen met het beantwoorden van vragen over de producten en diensten van de bank. Wat kan ik voor je doen?");
+                isTTSSpeaking = true; // Dit moet gezet worden zodra de TTS begint te spreken
+                
+                // Show Client Card
+                setTimeout(() => {
+                    const clientCardContainer = document.getElementById("client-card-container");
+                    if (clientCardContainer.style.visibility === "hidden") {
+                        clientCardContainer.style.visibility = "visible";
+                        clientCardContainer.classList.add("fadeIn");
+                        clientCardContainer.classList.remove("fadeOut");
+                    }
+                }, 800);
+                    
+                // Vervang de audio-analyse hier met de gesimuleerde spraakdata-functie
+                scene.registerBeforeRender(function () {
+                    let jawValue = 0;
+                    if (isTTSSpeaking) {
+                        const simulatedFrequencyData = simulateSpeechData();
+                        jawValue = simulatedFrequencyData / 512 * morphMultiplier_1;
+                    }
+    
+                    // Update de mondbewegingen hier
+                    scene.getMeshByName("Wolf3D_Head").morphTargetManager.getTarget(16).influence = jawValue * 2;
+                    scene.getMeshByName("Wolf3D_Head").morphTargetManager.getTarget(34).influence = jawValue;
+                    scene.getMeshByName("Wolf3D_Teeth").morphTargetManager.getTarget(34).influence = jawValue;
+                });
+            }
         }
 
+     
+
         // Check Talking Animations -- Start after 3 sec.
-        if (talking && speech.isPlaying && timer >= 3 && !currentAnimation.isPlaying) {
+        if (isTTSSpeaking && timer >= 3 && !currentAnimation.isPlaying) {
             let newTalkingAnim;
             do {
                 const random2 = Math.floor(Math.random() * 3) + 1;
@@ -710,6 +675,11 @@ function optimizeScene() {
     options.addOptimization(new BABYLON.HardwareScalingOptimization(0, 1));
     var optimizer = new BABYLON.SceneOptimizer(scene, options);
     optimizer.start();
+}
+
+
+function simulateSpeechData() {
+    return Math.random() * 255; // Simuleer frequentie data
 }
 
 // Post Processing
